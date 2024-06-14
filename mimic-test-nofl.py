@@ -1,13 +1,8 @@
 import os
 import random
+import time
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.utils.data import Dataset
 import pandas as pd
-from sklearn import linear_model
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
@@ -17,13 +12,13 @@ import openfl.native as fx
 from openfl.federated import FederatedModel,FederatedDataSet
 
 # ensure proper location of data files
-icu_stays_fn = "mimic-iv-clinical-database-demo-2.2/icu/icustays.csv/icustays.csv"
-input_events_fn = "mimic-iv-clinical-database-demo-2.2/icu/inputevents.csv/inputevents.csv"
-output_events_fn = "mimic-iv-clinical-database-demo-2.2/icu/outputevents.csv/outputevents.csv"
-ingred_events_fn = "mimic-iv-clinical-database-demo-2.2/icu/ingredientevents.csv/ingredientevents.csv"
-proced_events_fn = "mimic-iv-clinical-database-demo-2.2/icu/procedureevents.csv/procedureevents.csv"
-chart_events_fn = "mimic-iv-clinical-database-demo-2.2/icu/chartevents.csv/chartevents.csv"
-date_events_fn = "mimic-iv-clinical-database-demo-2.2/icu/datetimeevents.csv/datetimeevents.csv"
+icu_stays_fn = "data/icu/icustays.csv/icustays.csv"
+input_events_fn = "data/icu/inputevents.csv/inputevents.csv"
+output_events_fn = "dataicu/outputevents.csv/outputevents.csv"
+ingred_events_fn = "data/icu/ingredientevents.csv/ingredientevents.csv"
+proced_events_fn = "data/icu/procedureevents.csv/procedureevents.csv"
+chart_events_fn = "data/icu/chartevents.csv/chartevents.csv"
+date_events_fn = "data/icu/datetimeevents.csv/datetimeevents.csv"
 
 print("Reading data from CSV...")
 icu_stays = pd.read_csv(icu_stays_fn, usecols=['stay_id', 'los'])
@@ -54,9 +49,8 @@ item_columns = event_counts.columns[2:] # get values for all item columns
 print("DONE\n")
 
 print("Normalizing data...")
-max_stay = event_counts['los'].max()
 
-# might need to scale normalization between -1 and 1 per sklearn
+# min-max scaling normalization
 event_counts[item_columns] = event_counts[item_columns] / event_counts[item_columns].max()
 event_counts['los'] = event_counts['los'].astype(int) # continuous: / max_stay
 
@@ -66,6 +60,7 @@ print("DONE\n")
 print("Creating training, validation, and testing datasets...")
 event_counts = event_counts.sample(frac=1, ignore_index=True) # shuffle the data
 
+# divide into training, testing, validation datasets
 cutoff_training = (int) (len(event_counts) * 0.8)
 cutoff_validation = cutoff_training + (int) (len(event_counts) * 0.1)
 training = event_counts[:cutoff_training]
@@ -76,6 +71,8 @@ print("DONE\n")
 
 print("Training model...")
 
+# separate training, validation, and testing inputs and outputs
+# convert to numpy for keras compatability
 train_x = training[item_columns].to_numpy()
 train_y = training['los'].to_numpy()
 valid_x = validation[item_columns].to_numpy()
@@ -83,32 +80,31 @@ valid_y = validation['los'].to_numpy()
 test_x = testing[item_columns].to_numpy()
 test_y = testing['los'].to_numpy()
 
-print(training[:3]['los'])
-print(train_y[:3])
+# print(training[:3]['los'])
+# print(train_y[:3])
 
-print(training[:3][item_columns])
-print(train_x[:3])
+# print(training[:3][item_columns])
+# print(train_x[:3])
 
+# getting length and width values for future use
 number_of_classes = max(event_counts['los']) + 1
 number_of_features = len(item_columns)
 
+# convert data to format accepted by keras model
 train_y = to_categorical(train_y, num_classes=number_of_classes)
 valid_y = to_categorical(valid_y, num_classes=number_of_classes)
 
+# model setup, parameters
 model = Sequential()
 model.add(Dense(number_of_classes,activation='softmax',input_dim=number_of_features))
 model.compile(optimizer='adam', loss='categorical_crossentropy')
+# training the model
 model.fit(train_x, train_y, 
           validation_data=(valid_x, valid_y), epochs=150)
 
 
-# linreg = linear_model.LogisticRegression(max_iter=200)
-# linreg.fit(training[item_columns], training['los'])
+print("Testing model...")
 
-# print("DONE\n")
-
-# print("Testing model...")
-# predictions = linreg.predict(testing[item_columns])
 predictions = np.argmax(model.predict(test_x), axis=1)
 print(predictions)
 
@@ -151,4 +147,3 @@ error = error / len(predictions)
 accuracy = accuracy / len(predictions)
 print("AVG ERROR:", error)
 print("ACCURACY: ", accuracy)
-#print(linreg.n_iter_)
