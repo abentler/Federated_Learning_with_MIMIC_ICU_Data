@@ -1,7 +1,5 @@
 # Federated Learning with MIMIC ICU Data
-Author: Anna Bentler, abentler@calpoly.edu 
-
-Advisor: DongFeng Fang, dofang@calpoly.edu 
+Author: Anna Bentler, Advisor: DongFeng Fang 
 
 Applying the OpenFL framework with the MIMIC IV dataset, which contains anonymized biometrics from ICU patients, to predict patient outcomes. 
 
